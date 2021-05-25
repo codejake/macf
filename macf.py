@@ -46,7 +46,6 @@ def main():
         print(get_cisco_style(clean_addr))
         print(get_hyphen_style_lower(clean_addr))
         print(get_hyphen_style_upper(clean_addr))
-
     else:
         for line in sys.stdin:
             clean_addr = clean(line)
