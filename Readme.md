@@ -1,5 +1,9 @@
 # macf: a dumb little MAC address formatting script
 
+## About macf
+
+`macf` is a basic script that takes MAC addresses in a variety of formats and outputs them in a variety of formats.
+
 ## Usage
 
 ```
