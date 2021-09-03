@@ -2,7 +2,7 @@
 # coding: utf-8
 
 #
-# macf: A dumb MAC address formatting utility tool by Jake.
+# macf: A dumb little MAC address formatting utility tool by Jake.
 #
 # Usage: macf <mac address> or 'cat foo.txt | macf'
 #
