@@ -1,72 +1,71 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-#
-# macf: A dumb MAC address formatting utility tool by Jake.
-#
-# Usage: macf <mac address> or 'cat foo.txt | macf'
-#
+"""
+macf: A simple MAC address formatting utility tool by Jake Shaw
+      (https://github.com/codejake).
 
-import os
+Usage: macf <mac address> or 'cat foo.txt | macf'
+"""
+
 import re
 import sys
+from typing import Callable, List
 
 
-# Assumes valid input
-def clean(unclean):
-    return re.sub(r'\W+', '', unclean)
-
-# aa:bb:cc:dd:11:22
+def clean(unclean: str) -> str:
+    """Remove any non-hexadecimal characters from the input string."""
+    return re.sub(r'[^0-9a-fA-F]', '', unclean)
 
 
-def get_colon_style_lower(input):
-    return f"{input[:2]}:{input[2:4]}:{input[4:6]}:{input[6:8]}:{input[8:10]}:{input[10:12]}".lower()
-
-# AA:BB:CC:DD:11:22
-
-
-def get_colon_style_upper(input):
-    return f"{input[:2]}:{input[2:4]}:{input[4:6]}:{input[6:8]}:{input[8:10]}:{input[10:12]}".upper()
-
-# aa-bb-cc-dd-11-22
+def format_mac(mac: str, separator: str, case: str = 'lower') -> str:
+    """Format a MAC address with the given separator and case."""
+    formatted = f"{mac[:2]}{separator}{mac[2:4]}{separator}{mac[4:6]}{separator}" \
+                f"{mac[6:8]}{separator}{mac[8:10]}{separator}{mac[10:12]}"
+    return formatted.lower() if case == 'lower' else formatted.upper()
 
 
-def get_hyphen_style_lower(input):
-    return f"{input[:2]}-{input[2:4]}-{input[4:6]}-{input[6:8]}-{input[8:10]}-{input[10:12]}".lower()
-
-# AA-BB-CC-DD-11-22
-
-
-def get_hyphen_style_upper(input):
-    return f"{input[:2]}-{input[2:4]}-{input[4:6]}-{input[6:8]}-{input[8:10]}-{input[10:12]}".upper()
-
-# aabb.ccdd.1122
+def get_cisco_style(mac: str) -> str:
+    """Format a MAC address in Cisco style."""
+    return f"{mac[:4]}.{mac[4:8]}.{mac[8:12]}".lower()
 
 
-def get_cisco_style(input):
-    return f"{input[:4]}.{input[4:8]}.{input[8:12]}".lower()
+def get_formatted_macs(mac: str) -> List[str]:
+    """Generate all formatted versions of a MAC address."""
+    clean_mac = clean(mac)
+    return [
+        format_mac(clean_mac, ':'),
+        clean_mac,
+        clean_mac.upper(),
+        format_mac(clean_mac, ':', 'upper'),
+        get_cisco_style(clean_mac),
+        format_mac(clean_mac, '-'),
+        format_mac(clean_mac, '-', 'upper')
+    ]
 
 
-def main():
+def process_mac(mac: str, output_func: Callable[[List[str]], None]) -> None:
+    """Process a single MAC address and output the results."""
+    formatted_macs = get_formatted_macs(mac)
+    output_func(formatted_macs)
+
+
+def print_formatted(formatted_macs: List[str]) -> None:
+    """Print formatted MAC addresses with newlines between them."""
+    print('\n\n'.join(formatted_macs))
+
+
+def print_formatted_inline(formatted_macs: List[str]) -> None:
+    """Print formatted MAC addresses on a single line."""
+    print(' '.join(formatted_macs))
+
+
+def main() -> None:
     if len(sys.argv) == 2:
-        clean_addr = clean(sys.argv[1])
-        print("")
-        print(get_colon_style_lower(clean_addr), end="\n\n")
-        print(clean_addr, end="\n\n")
-        print(clean_addr.upper(), end="\n\n")
-        print(get_colon_style_upper(clean_addr), end="\n\n")
-        print(get_cisco_style(clean_addr), end="\n\n")
-        print(get_hyphen_style_lower(clean_addr), end="\n\n")
-        print(get_hyphen_style_upper(clean_addr), end="\n\n")
+        process_mac(sys.argv[1], print_formatted)
     else:
         for line in sys.stdin:
-            clean_addr = clean(line)
-            print(get_colon_style_lower(clean_addr), end=' ')
-            print(clean_addr, end=' ')
-            print(get_colon_style_upper(clean_addr), end=' ')
-            print(get_hyphen_style_lower(clean_addr), end=' ')
-            print(get_hyphen_style_upper(clean_addr), end=' ')
-            print(get_cisco_style(clean_addr))
+            process_mac(line.strip(), print_formatted_inline)
 
 
 if __name__ == "__main__":
