@@ -26,3 +26,4 @@ go.work.sum
 
 macf
 macf-go
+dist/

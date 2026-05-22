@@ -1,0 +1,48 @@
+version: 2
+
+project_name: macf
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: macf
+    main: .
+    binary: macf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - arm64
+      - amd64
+    ignore:
+      - goos: darwin
+        goarch: amd64
+      - goos: windows
+        goarch: amd64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: release
+    ids:
+      - macf
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}'
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+changelog:
+  use: github
+
+release:
+  draft: false
