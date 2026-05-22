@@ -1,234 +1,160 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
+	"net"
 	"os"
-	"regexp"
 	"strings"
-
-	// https://github.com/alexflint/go-arg
-	"github.com/alexflint/go-arg"
 )
 
-func cleanEthernetAddress(input string) (string, error) {
-	// Create a regular expression to match characters that are not [a-fA-F0-9]
-	re := regexp.MustCompile("[^a-fA-F0-9]")
+type formatStyle string
 
-	// Remove any characters that don't match [a-fA-F0-9]
-	stripped := re.ReplaceAllString(input, "")
+const (
+	formatCisco  formatStyle = "cisco"
+	formatColon  formatStyle = "colon"
+	formatHyphen formatStyle = "hyphen"
+	formatNone   formatStyle = "none"
+)
 
-	// Check if the resulting string has 12 characters
-	if len(stripped) != 12 {
-		return "", errors.New("Invalid Ethernet address")
+var errInvalidMAC = errors.New("invalid Ethernet address")
+
+func normalizeMAC(input string) (string, error) {
+	if parsed, err := net.ParseMAC(input); err == nil && len(parsed) == 6 {
+		return strings.ToLower(hex.EncodeToString(parsed)), nil
 	}
 
-	// Convert the resulting string to lowercase
-	cleaned := strings.ToLower(stripped)
+	decoded, err := hex.DecodeString(input)
+	if err != nil || len(decoded) != 6 {
+		return "", errInvalidMAC
+	}
 
-	return cleaned, nil
+	return strings.ToLower(input), nil
 }
 
-func getCiscoDelimitedOUI(input string) (string, error) {
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Insert colons after every two characters
-	var result strings.Builder
-	for i, char := range cleaned {
-		if i > 0 && i%4 == 0 {
-			result.WriteRune('.')
-		}
-		result.WriteRune(char)
-	}
-
-	return result.String(), nil
-}
-
-func getNonDelimitedUppercaseOUI(input string) (string, error) {
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	return strings.ToUpper(cleaned), nil
-}
-
-func getColonDelimitedOUI(input string) (string, error) {
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Insert colons after every two characters
-	var result strings.Builder
-	for i, char := range cleaned {
-		if i > 0 && i%2 == 0 {
-			result.WriteRune(':')
-		}
-		result.WriteRune(char)
-	}
-
-	return result.String(), nil
-}
-
-func getColonDelimitedUppercaseOUI(input string) (string, error) {
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Insert colons after every two characters
-	var result strings.Builder
-	for i, char := range cleaned {
-		if i > 0 && i % 2 == 0 {
-			result.WriteRune(':')
-		}
-		result.WriteRune(char)
-	}
-
-	return strings.ToUpper(result.String()), nil
-}
-
-func getHyphenDelimitedUppercaseOUI(input string) (string, error) {
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Insert hyphens after every two characters
-	var result strings.Builder
-	for i, char := range cleaned {
-		if i > 0 && i%2 == 0 {
-			result.WriteRune('-')
-		}
-		result.WriteRune(char)
-	}
-
-	return strings.ToUpper(result.String()), nil
-}
-
-// The be-all function.
-func formatOUI(input string, format string) (string, error) {
-	spacer := 2
-	delimiter := "-" // Can only be one char.
-
-	switch format {
-	case "cisco":
-		spacer = 4
-		delimiter = "."
-	case "colon":
-		spacer = 2
-		delimiter = ":"
+func parseFormat(input string) (formatStyle, error) {
+	switch strings.ToLower(input) {
+	case string(formatCisco):
+		return formatCisco, nil
+	case string(formatColon):
+		return formatColon, nil
+	case string(formatHyphen):
+		return formatHyphen, nil
+	case string(formatNone):
+		return formatNone, nil
 	default:
-		spacer = 2
-		delimiter = "-"
+		return "", fmt.Errorf("invalid format %q (must be one of: cisco, colon, hyphen, none)", input)
+	}
+}
+
+func formatMAC(cleaned string, style formatStyle, uppercase bool) string {
+	var result string
+
+	switch style {
+	case formatCisco:
+		result = joinGroups(cleaned, 4, ".")
+	case formatColon:
+		result = joinGroups(cleaned, 2, ":")
+	case formatHyphen:
+		result = joinGroups(cleaned, 2, "-")
+	case formatNone:
+		result = cleaned
 	}
 
-	fmt.Println("Format: ", format, " Spacer: ", spacer, " Delim: ", delimiter)
-
-	cleaned, err := cleanEthernetAddress(input)
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	if uppercase {
+		return strings.ToUpper(result)
 	}
 
-	// Insert delimiter after every spacer characters
+	return result
+}
+
+func joinGroups(input string, width int, delimiter string) string {
 	var result strings.Builder
-	for i, char := range cleaned {
-		if i > 0 && i % spacer == 0 {
-			r := rune(delimiter[0])
-			result.WriteRune(r)
+	result.Grow(len(input) + (len(input)/width - 1))
+
+	for i := 0; i < len(input); i += width {
+		if i > 0 {
+			result.WriteString(delimiter)
 		}
-		result.WriteRune(char)
+		result.WriteString(input[i : i+width])
 	}
 
-	return result.String(), nil
+	return result.String()
 }
 
-func printAllFormats(input string) (error) {
-	formatFuncs := []func(string) (string, error){
-		getCiscoDelimitedOUI,
-		getNonDelimitedUppercaseOUI,
-		getColonDelimitedOUI,
-		getColonDelimitedUppercaseOUI,
-		getHyphenDelimitedUppercaseOUI,
+func allFormats(cleaned string) []string {
+	return []string{
+		formatMAC(cleaned, formatCisco, false),
+		formatMAC(cleaned, formatNone, true),
+		formatMAC(cleaned, formatColon, false),
+		formatMAC(cleaned, formatColon, true),
+		formatMAC(cleaned, formatHyphen, true),
 	}
-
-	for _, fn := range formatFuncs {
-		result, err := fn(input)
-		if err != nil {
-			return err
-		}
-		fmt.Println(result)
-	}
-
-	return nil
 }
 
-func printUsage() {
-	fmt.Println("Usage: macf [-f/--format <format>] [-u/--uppercase] <ethernet_address>")
-	fmt.Println("  Options:")
-	fmt.Println("")
-	fmt.Println("    --format options:")
-	fmt.Println("        cisco        => a1b2.c3d4.e5f6")
-	fmt.Println("        colon        => a1:b2:c3:d4:e5:f6")
-	fmt.Println("        hyphen       => a1-b2-c3-d4-e5-f6")
-	fmt.Println("        none         => a1b2c3d4e5f6")
+func usage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: macf [-f format] [-u] <ethernet_address>")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Formats:")
+	fmt.Fprintln(w, "  cisco   a1b2.c3d4.e5f6")
+	fmt.Fprintln(w, "  colon   a1:b2:c3:d4:e5:f6")
+	fmt.Fprintln(w, "  hyphen  a1-b2-c3-d4-e5-f6")
+	fmt.Fprintln(w, "  none    a1b2c3d4e5f6")
+}
 
-	fmt.Println("")
+func run(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("macf", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		usage(stderr)
+	}
+
+	var format string
+	var uppercase bool
+
+	fs.StringVar(&format, "format", "", "output format: cisco, colon, hyphen, none")
+	fs.StringVar(&format, "f", "", "output format: cisco, colon, hyphen, none")
+	fs.BoolVar(&uppercase, "uppercase", false, "uppercase output")
+	fs.BoolVar(&uppercase, "u", false, "uppercase output")
+
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if fs.NArg() != 1 {
+		usage(stderr)
+		return 2
+	}
+
+	cleaned, err := normalizeMAC(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", errInvalidMAC)
+		return 1
+	}
+
+	if format == "" {
+		for _, line := range allFormats(cleaned) {
+			fmt.Fprintln(stdout, line)
+		}
+		return 0
+	}
+
+	style, err := parseFormat(format)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintln(stdout, formatMAC(cleaned, style, uppercase))
+	return 0
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
-
-	var args struct {
-		Format string `arg:"-f,--format"`
-		Address string `arg:"positional"`
-		Upper bool `arg:"-u,--uppercase" default:"false"`
-	}
-	arg.MustParse(&args)
-
-	input := args.Address
-
-	if args.Format != "" {
-		// Format it!
-		result, err := formatOUI( input, args.Format)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-	// Check upper flag and set input accordingly.
-	if args.Upper == true {
-		fmt.Println(strings.ToUpper(result))
-	} else {
-		fmt.Println(result)
-	}
-		
-	} else {
-		err := printAllFormats(input)
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	}
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
