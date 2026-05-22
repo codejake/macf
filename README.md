@@ -1,4 +1,4 @@
-# macf
+# macf: MAC Address Formatter
 
 This small program reformats 48-bit OUIs, such as Ethernet addresses, in useful
 ways for network engineers.
