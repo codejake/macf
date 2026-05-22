@@ -1,4 +1,4 @@
-# macf: MAC Address Formatter
+# macf: A MAC address formatting utility
 
 This small program reformats 48-bit OUIs, such as Ethernet addresses, in ways that are 
 useful for network engineers. Tools, vendors, and individuals have different preferred 
