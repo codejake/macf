@@ -96,7 +96,9 @@ func allFormats(cleaned string) []string {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: macf [-f format] [-u] <ethernet_address>")
+	fmt.Fprintln(w, "Usage: macf [-f format] [-u] [ethernet_address]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "If no ethernet_address is provided, macf reads one from stdin.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Formats:")
 	fmt.Fprintln(w, "  cisco   a1b2.c3d4.e5f6")
@@ -105,7 +107,16 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  none    a1b2c3d4e5f6")
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func readInput(stdin io.Reader) (string, error) {
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(data)), nil
+}
+
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("macf", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
@@ -127,12 +138,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	if fs.NArg() != 1 {
+	if fs.NArg() > 1 {
 		usage(stderr)
 		return 2
 	}
 
-	cleaned, err := normalizeMAC(fs.Arg(0))
+	input := ""
+	if fs.NArg() == 1 {
+		input = fs.Arg(0)
+	} else {
+		var err error
+		input, err = readInput(stdin)
+		if err != nil {
+			fmt.Fprintf(stderr, "Error: failed to read stdin: %v\n", err)
+			return 1
+		}
+		if input == "" {
+			usage(stderr)
+			return 2
+		}
+	}
+
+	cleaned, err := normalizeMAC(input)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", errInvalidMAC)
 		return 1
@@ -156,5 +183,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }

@@ -10,13 +10,31 @@ or Cisco-style dotted notation (`AABBCCDDEEFF` and `aabb.ccdd.eeff`).
 ## Usage
 
 ```
-Usage: macf [-f format] [-u] <ethernet_address>
+Usage: macf [-f format] [-u] [ethernet_address]
+
+If no ethernet_address is provided, macf reads one from stdin.
 
 Formats:
   cisco   a1b2.c3d4.e5f6
   colon   a1:b2:c3:d4:e5:f6
   hyphen  a1-b2-c3-d4-e5-f6
   none    a1b2c3d4e5f6
+```
+
+Examples:
+
+```sh
+# Show all common formats for a MAC address passed as an argument
+macf c6:89:f2:d2:dc:3e
+
+# Produce a single output format
+macf -f none c6:89:f2:d2:dc:3e
+
+# Read the MAC address from stdin
+echo c6:89:f2:d2:dc:3e | macf
+
+# Combine stdin input with formatting flags
+echo c6:89:f2:d2:dc:3e | macf -f hyphen -u
 ```
 
 ## Releases

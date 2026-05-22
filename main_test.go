@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 )
@@ -101,6 +102,7 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name       string
 		args       []string
+		stdin      string
 		wantCode   int
 		wantStdout string
 		wantStderr string
@@ -117,6 +119,12 @@ func TestRun(t *testing.T) {
 				"C6-89-F2-D2-DC-3E",
 				"",
 			}, "\n"),
+		},
+		{
+			name:       "stdin fallback",
+			stdin:      "c6:89:f2:d2:DC:3E\n",
+			wantCode:   0,
+			wantStdout: "c689.f2d2.dc3e\nC689F2D2DC3E\nc6:89:f2:d2:dc:3e\nC6:89:F2:D2:DC:3E\nC6-89-F2-D2-DC-3E\n",
 		},
 		{
 			name:       "none uppercase",
@@ -140,7 +148,13 @@ func TestRun(t *testing.T) {
 			name:       "missing address",
 			args:       nil,
 			wantCode:   2,
-			wantStderr: "Usage: macf [-f format] [-u] <ethernet_address>\n\nFormats:\n  cisco   a1b2.c3d4.e5f6\n  colon   a1:b2:c3:d4:e5:f6\n  hyphen  a1-b2-c3-d4-e5-f6\n  none    a1b2c3d4e5f6\n",
+			wantStderr: "Usage: macf [-f format] [-u] [ethernet_address]\n\nIf no ethernet_address is provided, macf reads one from stdin.\n\nFormats:\n  cisco   a1b2.c3d4.e5f6\n  colon   a1:b2:c3:d4:e5:f6\n  hyphen  a1-b2-c3-d4-e5-f6\n  none    a1b2c3d4e5f6\n",
+		},
+		{
+			name:       "too many addresses",
+			args:       []string{"c6:89:f2:d2:DC:3E", "aa:bb:cc:dd:ee:ff"},
+			wantCode:   2,
+			wantStderr: "Usage: macf [-f format] [-u] [ethernet_address]\n\nIf no ethernet_address is provided, macf reads one from stdin.\n\nFormats:\n  cisco   a1b2.c3d4.e5f6\n  colon   a1:b2:c3:d4:e5:f6\n  hyphen  a1-b2-c3-d4-e5-f6\n  none    a1b2c3d4e5f6\n",
 		},
 	}
 
@@ -152,7 +166,8 @@ func TestRun(t *testing.T) {
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
 
-			gotCode := run(tc.args, &stdout, &stderr)
+			stdin := io.Reader(strings.NewReader(tc.stdin))
+			gotCode := run(tc.args, stdin, &stdout, &stderr)
 			if gotCode != tc.wantCode {
 				t.Fatalf("run(%v) code = %d, want %d", tc.args, gotCode, tc.wantCode)
 			}
