@@ -1,11 +1,8 @@
 # macf: MAC Address Formatter
 
-This small program reformats 48-bit OUIs, such as Ethernet addresses, in useful
-ways for network engineers.
-
-The OUI is normally represented as a set of octets in hexadecimal notation
-separated by hyphens or colons, but some tools and vendors also use plain hex
-or Cisco-style dotted notation (`AABBCCDDEEFF` and `aabb.ccdd.eeff`).
+This small program reformats 48-bit OUIs, such as Ethernet addresses, in ways that are 
+useful for network engineers. Tools, vendors, and individuals have different preferred 
+formats.
 
 ## Usage
 
